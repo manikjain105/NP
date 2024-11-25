@@ -1,73 +1,38 @@
-#include <stdio.h> // perror, printf
-#include <stdlib.h> // exit, atoi
-#include <unistd.h> // read, write, close
-#include <arpa/inet.h> // sockaddr_in, AF_INET, SOCK_STREAM, INADDR_ANY, socket etc...
-#include <string.h> // memset
-
-int main(int argc, char const *argv[]) {
-
-  int serverFd, clientFd;
-  struct sockaddr_in server, client;
-  int len;
-  int port = 1234;
-  char buffer[1024];
-  char message[1024];
-
-  serverFd = socket(AF_INET, SOCK_STREAM, 0);
-  if (serverFd < 0) {
-    perror("Cannot create socket");
-    exit(1);
-  }
-
-  server.sin_family = AF_INET;
-  server.sin_addr.s_addr = INADDR_ANY;
-  server.sin_port = htons(port);
-  len = sizeof(server);
-  if (bind(serverFd, (struct sockaddr *)&server, len) < 0) {
-    perror("Cannot bind sokcet");
-    exit(2);
-  }
-
-  if (listen(serverFd, 10) < 0) {
-    perror("Listen error");
-    exit(3);
-  }
-
-  len = sizeof(client);
-    printf("waiting for clients\n");
-    if ((clientFd = accept(serverFd, (struct sockaddr *)&client, &len)) < 0) {
-      perror("accept error");
-      exit(4);
-    }
-    char *client_ip = inet_ntoa(client.sin_addr);
-    printf("Accepted new connection from a client %s:%d\n", client_ip, ntohs(client.sin_port));
-
-  while (1) {
-    
-    memset(buffer, 0, sizeof(buffer));
-    int size = read(clientFd, buffer, sizeof(buffer));
-    if ( size < 0 ) {
-      perror("read error");
-      exit(5);
-    }
-    printf("received %s from client\n", buffer);
-
-    if(strcmp(buffer,"bye")==0)
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+ #include <sys/types.h>
+ #include <sys/socket.h>
+ #include <arpa/inet.h>
+ #include <netinet/in.h>
+ #include <string.h>
+ #define  err_log(log) do{perror(log); exit(1);}while(0)
+ #define  N  128
+ int main(int argc, const char *argv[])
+ {
+    int sockfd;
+    char buf[N];
+    struct sockaddr_in broadcastaddr, srcaddr;
+    if((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     {
-     break;
+        err_log("fail to socket");
     }
-
-    printf("Enter message for client: ");
-        fgets(message, sizeof(message), stdin);
-        message[strcspn(message, "\n")] = '\0';
-
-    if (write(clientFd, message, strlen(message)) < 0) {
-      perror("write error");
-      exit(6);
+    broadcastaddr.sin_family = AF_INET;
+    broadcastaddr.sin_addr.s_addr = inet_addr("192.168.1.255");   
+                                                                                       //Broadcast address/ INADDR_ANY
+    broadcastaddr.sin_port = htons(10000);
+    if(bind(sockfd, (struct sockaddr*)&broadcastaddr, sizeof(broadcastaddr)) < 0)
+    {
+        err_log("fail to bind");
     }
-    
-  }
-  close(clientFd);
-  close(serverFd);
-  return 0;
-}
+    socklen_t addrlen = sizeof(struct sockaddr);
+    while(1)
+    {
+        if(recvfrom(sockfd,buf, N, 0, (struct sockaddr *)&srcaddr, &addrlen) < 0)
+        {
+            err_log("fail to sendto");
+        }
+        printf("buf:%s ---> %s %d\n", buf, inet_ntoa(srcaddr.sin_addr), ntohs(srcaddr.sin_port));
+    }
+    return 0;
+ }
