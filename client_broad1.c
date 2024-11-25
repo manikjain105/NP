@@ -1,38 +1,51 @@
- #include <stdio.h>
- #include <stdlib.h>
- #include <unistd.h>
- #include <sys/types.h>
- #include <sys/socket.h>
- #include <arpa/inet.h>
- #include <netinet/in.h>
- #include <string.h>
- #define  err_log(log) do{perror(log); exit(1);}while(0)
- #define  N 128
- int main(int argc, const char *argv[])
- {
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define PORT 22000
+#define BUFFER_SIZE 100
+
+int main() {
     int sockfd;
-    struct sockaddr_in broadcastaddr;
-    char buf[N] = {0};
-    if((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-    {
-        err_log("fail to socket");
+    struct sockaddr_in recvAddr;
+    char buffer[BUFFER_SIZE];
+    socklen_t addrLen = sizeof(recvAddr);
+
+    // Create a UDP socket for receiving datagrams
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("socket failed");
+        exit(1);
     }
-    broadcastaddr.sin_family = AF_INET;
-    broadcastaddr.sin_addr.s_addr = inet_addr("192.168.1.255");        //Broadcast address
-    broadcastaddr.sin_port = htons(10000);
-    int optval = 1;
-    if(setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(int)) < 0)
-    {
+
+    // Setup the address structure to bind the socket
+    memset(&recvAddr, 0, sizeof(recvAddr));
+    recvAddr.sin_family = AF_INET;
+    recvAddr.sin_addr.s_addr = htonl(INADDR_ANY);  // Listen on all interfaces
+    recvAddr.sin_port = htons(PORT);
+
+    // Bind the socket to the port
+    if (bind(sockfd, (struct sockaddr *)&recvAddr, sizeof(recvAddr)) < 0) {
+        perror("bind failed");
+        exit(1);
     }
-        err_log("fail to setsockopt");
-    while(1)
-    {
-        printf("Input > ");
-        fgets(buf, N, stdin);
-        if(sendto(sockfd,buf, N, 0, (struct sockaddr *)&broadcastaddr, sizeof(broadcastaddr)) < 0)
-        {
-            err_log("fail to sendto");
+
+    printf("Waiting for broadcast messages...\n");
+
+    // Receive broadcast messages
+    while (1) {
+        int recvLen = recvfrom(sockfd, buffer, BUFFER_SIZE - 1, 0, (struct sockaddr *)&recvAddr, &addrLen);
+        if (recvLen < 0) {
+            perror("recvfrom failed");
+            exit(1);
         }
+        buffer[recvLen] = '\0';  // Null-terminate the received message
+        printf("Received broadcast message: %s\n", buffer);
     }
+
+    // Close the socket (not reachable in this example since it loops forever)
+    close(sockfd);
     return 0;
- }
+}
